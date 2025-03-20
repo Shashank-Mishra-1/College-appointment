@@ -1,18 +1,38 @@
 const Appointment = require('../models/Appointment');
+const Availability = require('../models/Availability');
 const mongoose = require('mongoose');
 
 exports.bookAppointment = async (req, res) => {
     try {
         const { studentId, professorId, timeSlot } = req.body;
 
-        console.log("📌 Booking appointment for:", studentId, "with Professor:", professorId, "at", timeSlot);
+        
+        if (!studentId || !professorId || !timeSlot) {
+            return res.status(400).json({ error: "Missing required fields: studentId, professorId, and timeSlot" });
+        }
 
+       
+        if (!mongoose.Types.ObjectId.isValid(studentId) || !mongoose.Types.ObjectId.isValid(professorId)) {
+            return res.status(400).json({ error: "Invalid studentId or professorId format" });
+        }
+
+        
+        const availability = await Availability.findOne({ professorId });
+        if (!availability || !availability.availableSlots.includes(new Date(timeSlot).toISOString())) {
+            return res.status(400).json({ error: "Professor is not available at the selected time" });
+        }
+
+        
+        const existingAppointment = await Appointment.findOne({ studentId, timeSlot });
+        if (existingAppointment) {
+            return res.status(400).json({ error: "Student has already booked this time slot" });
+        }
+
+     
         const appointment = new Appointment({ studentId, professorId, timeSlot, status: "booked" });
         await appointment.save();
 
-        console.log("✅ Appointment successfully booked:", appointment);
-
-        res.status(201).json({ message: "Appointment booked", appointment });
+        res.status(201).json({ message: "Appointment booked successfully", appointment });
     } catch (error) {
         console.error("❌ Error booking appointment:", error);
         res.status(500).json({ error: "Failed to book appointment", details: error.message });
